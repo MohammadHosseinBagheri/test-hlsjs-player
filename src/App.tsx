@@ -130,10 +130,11 @@ function Reel({ index, src, refs, activeIndex }: ReelProps) {
         refs.current[index] = el;
       }}
       style={{
-        width: "50%",
-        height: "50%",
+        width: "100%",
+        height: "100%",
         objectFit: "contain",
         background: "#000",
+        pointerEvents: "none",
       }}
       muted
       loop
