@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import Hls from "hls.js";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Virtual } from "swiper/modules";
+import { usePerformanceMonitor } from "./usePerformanceMonitor";
 
 const videos = [
   "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
@@ -54,29 +55,56 @@ const videos = [
 export default function Reels() {
   const refs = useRef<(HTMLVideoElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const stats = usePerformanceMonitor();
 
   return (
-    <Swiper
-      direction="vertical"
-      modules={[Virtual]}
-      slidesPerView={1}
-      virtual={{
-        addSlidesBefore: 5,
-        addSlidesAfter: 5,
-      }}
-      mousewheel
-      onSlideChange={(swiper) => {
-        setActiveIndex(swiper.activeIndex);
-      }}
-      style={{ width: "100%", height: "100vh" }}
-      resistanceRatio={0}
-    >
-      {videos.map((src, index) => (
-        <SwiperSlide key={index} virtualIndex={index}>
-          <Reel activeIndex={activeIndex} src={src} index={index} refs={refs} />
-        </SwiperSlide>
-      ))}
-    </Swiper>
+    <>
+      <Swiper
+        direction="vertical"
+        modules={[Virtual]}
+        slidesPerView={1}
+        virtual={{
+          addSlidesBefore: 5,
+          addSlidesAfter: 5,
+        }}
+        mousewheel
+        onSlideChange={(swiper) => {
+          setActiveIndex(swiper.activeIndex);
+        }}
+        style={{ width: "100%", height: "100vh" }}
+        resistanceRatio={0}
+      >
+        {videos.map((src, index) => (
+          <SwiperSlide key={index} virtualIndex={index}>
+            <Reel
+              activeIndex={activeIndex}
+              src={src}
+              index={index}
+              refs={refs}
+            />
+          </SwiperSlide>
+        ))}
+      </Swiper>
+      <div
+        style={{
+          position: "fixed",
+          top: 10,
+          left: 10,
+          background: "rgba(0,0,0,0.6)",
+          color: "#0f0",
+          padding: "8px 10px",
+          fontSize: "12px",
+          zIndex: 9999,
+          fontFamily: "monospace",
+          borderRadius: "6px",
+        }}
+      >
+        <div>FPS: {stats.fps}</div>
+        <div>JS Heap: {stats.jsHeapMB} MB</div>
+        <div>Downloaded: {stats.downloadedMB} MB</div>
+        <div>Segments: {stats.segments}</div>
+      </div>
+    </>
   );
 }
 
@@ -97,6 +125,11 @@ function Reel({ index, src, refs, activeIndex }: ReelProps) {
   useEffect(() => {
     const videoEl = refs.current?.[index];
     if (!videoEl) return;
+    if (hlsRef.current) {
+      hlsRef.current.on(Hls.Events.FRAG_LOADED, (_, data) => {
+        if (window._fragLoaded) window._fragLoaded(data);
+      });
+    }
     if (bufListenerRef.current && hlsRef.current) {
       hlsRef.current.off(Hls.Events.BUFFER_APPENDED, bufListenerRef.current);
       bufListenerRef.current = null;
@@ -106,7 +139,12 @@ function Reel({ index, src, refs, activeIndex }: ReelProps) {
       // console.log("render", hlsRef.current);
 
       if (Hls.isSupported()) {
-        const hls = new Hls();
+        const hls = new Hls({
+          maxMaxBufferLength: 3,
+          maxBufferLength: 2,
+          startLevel: 1,
+          capLevelToPlayerSize: true,
+        });
         hls.loadSource(src);
         hls.attachMedia(videoEl);
         hlsRef.current = hls;
