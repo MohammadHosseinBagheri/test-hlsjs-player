@@ -54,10 +54,6 @@ const videos = [
 export default function Reels() {
   const refs = useRef<(HTMLVideoElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  console.log(
-    "Active HLS instances:",
-    refs.current.filter((v) => v && !v.paused).length
-  );
 
   return (
     <Swiper
@@ -99,14 +95,14 @@ function Reel({ index, src, refs, activeIndex }: ReelProps) {
   const shouldFullyPlay = index === activeIndex;
 
   useEffect(() => {
-    hlsRef.current?.on(Hls.Events.BUFFER_APPENDED, () => {
-      const buffered = refs.current[index]?.buffered;
-      console.log("Buffer ranges:", buffered);
-    });
     const videoEl = refs.current?.[index];
     if (!videoEl) return;
+    if (bufListenerRef.current && hlsRef.current) {
+      hlsRef.current.off(Hls.Events.BUFFER_APPENDED, bufListenerRef.current);
+      bufListenerRef.current = null;
+    }
 
-    if (shouldInit && hlsRef.current === null) {
+    if (shouldInit && !hlsRef.current) {
       // console.log("render", hlsRef.current);
 
       if (Hls.isSupported()) {
@@ -133,8 +129,6 @@ function Reel({ index, src, refs, activeIndex }: ReelProps) {
         }
       }
     } else if (hlsRef.current) {
-      console.log("reedner", index);
-
       if (shouldFullyPlay) {
         console.log({ index, activeIndex });
         hlsRef.current.off(Hls.Events.BUFFER_APPENDED, bufListenerRef.current);
@@ -147,17 +141,26 @@ function Reel({ index, src, refs, activeIndex }: ReelProps) {
         videoEl.pause();
         hlsRef.current.stopLoad();
       }
+      if (index === activeIndex + 1) {
+        videoEl.pause();
+        bufListenerRef.current = () => {
+          const buf = videoEl.buffered;
+          if (buf.length > 0 && buf.end(0) >= 2) {
+            videoEl.pause();
+            hlsRef.current?.stopLoad();
+          }
+        };
+        hlsRef.current.on(Hls.Events.BUFFER_APPENDED, bufListenerRef.current);
+      }
     }
 
     return () => {
-      // if (bufListenerRef.current && hlsRef.current) {
-      //   hlsRef.current.off(Hls.Events.BUFFER_APPENDED, bufListenerRef.current);
-      //   bufListenerRef.current = null;
-      // }
+      if (bufListenerRef.current && hlsRef.current) {
+        hlsRef.current.off(Hls.Events.BUFFER_APPENDED, bufListenerRef.current);
+        bufListenerRef.current = null;
+      }
 
       if (Math.abs(activeIndex - index) > 1 && hlsRef.current) {
-        console.log({ activeIndex });
-
         hlsRef.current.stopLoad();
         hlsRef.current.detachMedia();
         hlsRef.current.destroy();
