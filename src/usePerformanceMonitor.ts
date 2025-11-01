@@ -15,8 +15,8 @@ export function usePerformanceMonitor() {
   let downloadedBytes = 0;
   let segments = 0;
 
-  const handleFragLoaded = (data: any) => {
-    downloadedBytes += data.stats.total;
+  const handleFragLoaded = (data: any) => {    
+    downloadedBytes += data.frag._stats.total;
     segments++;
   };
 
